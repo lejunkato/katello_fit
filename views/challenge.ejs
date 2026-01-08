@@ -1,0 +1,98 @@
+<section class="card">
+  <div class="challenge-header">
+    <div>
+      <h2><%= challenge.title %></h2>
+      <p><%= challenge.description || "Sem descricao." %></p>
+      <p><strong>Periodo:</strong> <%= challenge.start_date %> a <%= challenge.end_date %></p>
+      <p><strong>Meta:</strong> <%= challenge.goal_count %> exercicios por participante</p>
+      <% if (challenge.prize) { %><p><strong>Premio:</strong> <%= challenge.prize %></p><% } %>
+      <% if (challenge.penalty) { %><p><strong>Penalidade:</strong> <%= challenge.penalty %></p><% } %>
+    </div>
+    <div>
+      <% if (!hasJoined) { %>
+        <form method="post" action="/challenges/<%= challenge.id %>/entrar">
+          <button type="submit">Entrar no desafio</button>
+        </form>
+      <% } else { %>
+        <span class="tag">Participando</span>
+      <% } %>
+    </div>
+  </div>
+</section>
+
+<% if (isOwner) { %>
+<section class="card">
+  <h3>Painel do desafio</h3>
+  <p>Voce e o criador deste desafio. Use este espaco para acompanhar o progresso.</p>
+  <div class="summary">
+    <p><strong>Participantes:</strong> <%= leaderboard.length %></p>
+    <p><strong>Meta individual:</strong> <%= challenge.goal_count %> exercicios</p>
+  </div>
+</section>
+<% } %>
+
+<section class="card">
+  <h3>Registrar treino</h3>
+  <% if (hasJoined) { %>
+    <form method="post" action="/challenges/<%= challenge.id %>/log" class="two-columns log-form">
+      <label>Exercicio
+        <input type="text" name="activity" placeholder="Ex: corrida, academia" required />
+      </label>
+      <label>Data do treino
+        <input type="date" name="logged_on" value="<%= today %>" />
+      </label>
+      <button type="submit" class="button-link">Adicionar</button>
+    </form>
+  <% } else { %>
+    <p>Entre no desafio para registrar seus treinos.</p>
+  <% } %>
+</section>
+
+<section class="card">
+  <h3>Ranking atual</h3>
+  <% if (leaderboard && leaderboard.length) { %>
+    <div class="podium">
+      <% const topThree = leaderboard.slice(0, 3); %>
+      <% topThree.forEach((row, index) => { %>
+        <div class="podium-item position-<%= index + 1 %>">
+          <span class="podium-rank">#<%= index + 1 %></span>
+          <strong><%= row.name %></strong>
+          <span><%= row.total %> exercicios</span>
+        </div>
+      <% }) %>
+    </div>
+
+    <div class="chart">
+      <% const maxTotal = Math.max(...leaderboard.map(item => item.total), 1); %>
+      <% leaderboard.forEach((row) => { %>
+        <div class="chart-row">
+          <span class="chart-label"><%= row.name %></span>
+          <div class="chart-bar" style="width: <%= Math.round((row.total / maxTotal) * 100) %>%;">
+            <span><%= row.total %></span>
+          </div>
+        </div>
+      <% }) %>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Participante</th>
+          <th>Total</th>
+          <th>Faltam</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% leaderboard.forEach((row) => { %>
+          <tr>
+            <td><%= row.name %></td>
+            <td><%= row.total %></td>
+            <td><%= row.remaining %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } else { %>
+    <p>Sem participantes por enquanto.</p>
+  <% } %>
+</section>

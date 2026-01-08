@@ -1,0 +1,83 @@
+<section class="hero">
+  <div>
+    <h2>Bem-vindo, <%= currentUser ? currentUser.name : "atleta" %>!</h2>
+    <p>Prepare-se para superar seus limites hoje.</p>
+  </div>
+  <div class="hero-badge">💪</div>
+</section>
+
+<section class="metrics">
+  <div class="metric-card">
+    <span>Treinos</span>
+    <strong><%= userExerciseCount %></strong>
+  </div>
+  <div class="metric-card">
+    <span>Desafios</span>
+    <strong><%= activeChallenges ? activeChallenges.length : 0 %></strong>
+  </div>
+  <div class="metric-card">
+    <span>Posicao</span>
+    <strong><%= position === "--" ? "--" : `#${position}` %></strong>
+  </div>
+</section>
+
+<section class="card challenge-highlight">
+  <div class="card-header">
+    <h3>Desafio ativo</h3>
+  </div>
+  <% const active = activeChallenge; %>
+  <% if (active && activeStats) { %>
+    <div class="highlight-body">
+      <div>
+        <h4><%= active.title %></h4>
+        <p><%= active.description || "Complete a meta do desafio e suba no ranking." %></p>
+        <div class="progress">
+          <div class="progress-bar" style="width: <%= activeStats.progressPercent %>%;"></div>
+        </div>
+        <div class="challenge-meta">
+          <span>👥 <%= activeStats.participantCount %></span>
+          <span>📅 <%= activeStats.daysRemaining %> dias</span>
+        </div>
+      </div>
+      <div class="highlight-actions">
+        <a class="button-link" href="/challenges/<%= active.id %>">Ver detalhes</a>
+      </div>
+    </div>
+  <% } else { %>
+    <p>Nenhum desafio ativo no momento.</p>
+  <% } %>
+</section>
+
+<section class="card">
+  <div class="card-header">
+    <h3>Meus desafios</h3>
+  </div>
+  <% if (creatorChallenges && creatorChallenges.length) { %>
+    <div class="challenge-grid">
+      <% creatorChallenges.forEach((challenge) => { %>
+        <div class="mini-card">
+          <h4><%= challenge.title %></h4>
+          <p><%= challenge.description || "Mantenha o ritmo e conclua a meta." %></p>
+          <div class="progress slim">
+            <div class="progress-bar" style="width: <%= challenge.progressPercent %>%;"></div>
+          </div>
+          <div class="challenge-meta">
+            <span>👥 <%= challenge.participantCount %></span>
+            <span>📅 <%= challenge.daysRemaining %> dias</span>
+          </div>
+          <a class="button-link" href="/challenges/<%= challenge.id %>">Ver detalhes</a>
+        </div>
+      <% }) %>
+    </div>
+  <% } else { %>
+    <p>Voce ainda nao criou nenhum desafio.</p>
+  <% } %>
+</section>
+
+<section class="cta-banner">
+  <div>
+    <h3>Crie seu proximo desafio</h3>
+    <p>Desafie amigos, estabeleca metas e acompanhe seu progresso.</p>
+  </div>
+  <a class="button-link light" href="/challenges/novo">Criar desafio +</a>
+</section>

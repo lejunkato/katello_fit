@@ -1,0 +1,40 @@
+<section class="card form-card">
+  <div class="form-header">
+    <h2>Criar novo desafio</h2>
+    <p>Defina a meta do grupo e desafie outros atletas.</p>
+  </div>
+  <form method="post" action="/challenges/novo">
+    <label>Nome do desafio
+      <input type="text" name="title" placeholder="Ex: 30 dias de flexoes" required />
+    </label>
+    <label>Descricao
+      <textarea name="description" rows="3" placeholder="Descreva o objetivo e regras do desafio..." required></textarea>
+    </label>
+    <div class="two-columns">
+      <label>Data inicio
+        <input type="date" name="start_date" value="<%= today %>" required />
+      </label>
+      <label>Data fim
+        <input type="date" name="end_date" value="<%= today %>" required />
+      </label>
+    </div>
+    <div class="two-columns">
+      <label>Meta (numero)
+        <input type="number" name="goal_count" min="1" placeholder="Ex: 1000" required />
+      </label>
+      <label>Duracao (dias)
+        <input type="number" name="duration" min="1" placeholder="Ex: 30" />
+      </label>
+    </div>
+    <label>Premio (opcional)
+      <input type="text" name="prize" />
+    </label>
+    <label>Penalidade (opcional)
+      <input type="text" name="penalty" />
+    </label>
+    <div class="form-actions">
+      <button type="reset" class="button-link ghost">Cancelar</button>
+      <button type="submit" class="button-link">Criar desafio</button>
+    </div>
+  </form>
+</section>

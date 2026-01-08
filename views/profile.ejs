@@ -1,0 +1,32 @@
+<section class="hero">
+  <div>
+    <h2>Perfil</h2>
+    <p>Seus dados e estatisticas pessoais.</p>
+  </div>
+  <div class="hero-badge">👤</div>
+</section>
+
+<section class="card profile-card">
+  <div class="profile-header">
+    <div class="avatar large"><%= user.name.slice(0, 1).toUpperCase() %></div>
+    <div>
+      <h3><%= user.name %></h3>
+      <p><%= user.email %></p>
+      <span class="tag">Participante</span>
+    </div>
+  </div>
+  <div class="profile-stats">
+    <div>
+      <strong><%= exerciseCount %></strong>
+      <span>Treinos registrados</span>
+    </div>
+    <div>
+      <strong><%= joinedCount %></strong>
+      <span>Desafios em que participa</span>
+    </div>
+    <div>
+      <strong><%= createdCount %></strong>
+      <span>Desafios criados</span>
+    </div>
+  </div>
+</section>

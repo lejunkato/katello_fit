@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title><%= title || "Katello Fitness" %></title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <%- include('partials_header') %>
+
+  <main>
+    <% if (flash && flash.length) { %>
+      <div class="flash-area">
+        <% flash.forEach((item) => { %>
+          <div class="flash <%= item.type %>"><%= item.message %></div>
+        <% }) %>
+      </div>
+    <% } %>
+
+    <%- body %>
+  </main>
+
+  <footer class="site-footer">
+    <p>Projeto inicial para desafios fitness.</p>
+  </footer>
+
+  <script>
+    const toggle = document.querySelector(".menu-toggle");
+    const panel = document.querySelector("[data-menu]");
+    const overlay = document.querySelector("[data-overlay]");
+    if (toggle && panel) {
+      const closeMenu = () => {
+        panel.classList.remove("open");
+        if (overlay) overlay.classList.remove("open");
+        toggle.setAttribute("aria-expanded", "false");
+      };
+      toggle.addEventListener("click", () => {
+        const isOpen = panel.classList.toggle("open");
+        if (overlay) overlay.classList.toggle("open", isOpen);
+        toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+      });
+      if (overlay) {
+        overlay.addEventListener("click", closeMenu);
+      }
+    }
+  </script>
+</body>
+</html>

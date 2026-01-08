@@ -1,0 +1,38 @@
+<header class="site-header">
+  <div class="header-top">
+    <% if (currentUser) { %>
+      <button class="menu-toggle" type="button" aria-label="Abrir menu" aria-expanded="false">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+    <% } %>
+    <div class="brand">
+      <div class="brand-mark">FK</div>
+      <div>
+        <h1>Fitness Katello</h1>
+        <p>Desafios, metas e ranking de exercicios.</p>
+      </div>
+    </div>
+  </div>
+  <% if (currentUser) { %>
+    <div class="sidebar-overlay" data-overlay></div>
+    <aside class="sidebar" data-menu>
+      <nav class="main-nav">
+        <a class="nav-item <%= currentPath === '/dashboard' ? 'active' : '' %>" href="/dashboard">Dashboard</a>
+        <a class="nav-item <%= currentPath.startsWith('/challenges/novo') ? 'active' : '' %>" href="/challenges/novo">Criar</a>
+        <a class="nav-item <%= currentPath === '/perfil' ? 'active' : '' %>" href="/perfil">Perfil</a>
+      </nav>
+      <div class="user-chip">
+        <div class="user-info">
+          <span class="user-name"><%= currentUser.name %></span>
+          <span class="user-role">Atleta</span>
+        </div>
+        <div class="avatar">
+          <%= currentUser.name ? currentUser.name.slice(0, 1).toUpperCase() : "U" %>
+        </div>
+        <a class="logout" href="/logout">Sair</a>
+      </div>
+    </aside>
+  <% } %>
+</header>
