@@ -28,6 +28,15 @@ a {
   color: inherit;
 }
 
+.inline-link {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.inline-link:hover {
+  text-decoration: underline;
+}
+
 .site-header {
   position: sticky;
   top: 0;
@@ -884,6 +893,10 @@ textarea,
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+}
+
+.form-actions form {
+  margin: 0;
 }
 
 .form-actions.right {

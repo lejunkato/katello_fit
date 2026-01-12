@@ -164,6 +164,14 @@
           <input type="text" value="<%= inviteLink %>" readonly />
         </label>
       </div>
+      <div class="form-actions right">
+        <form method="post" action="/challenges/<%= challenge.id %>/encerrar">
+          <button type="submit" class="button-link ghost">Encerrar</button>
+        </form>
+        <form method="post" action="/challenges/<%= challenge.id %>/excluir" onsubmit="return confirm('Tem certeza que deseja excluir este desafio?');">
+          <button type="submit" class="button-link danger">Excluir</button>
+        </form>
+      </div>
     </section>
     <% } %>
   </aside>

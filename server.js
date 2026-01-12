@@ -169,13 +169,13 @@ app.get("/dashboard", requireAuth, (req, res) => {
       `SELECT DISTINCT c.*
        FROM challenges c
        LEFT JOIN challenge_participants cp ON cp.challenge_id = c.id
-       WHERE c.creator_id = ? OR cp.user_id = ?
+       WHERE (c.creator_id = ? OR cp.user_id = ?) AND c.status = 'active'
        ORDER BY c.end_date ASC`
     )
     .all(req.session.userId, req.session.userId);
 
   const creatorChallenges = db
-    .prepare("SELECT * FROM challenges WHERE creator_id = ?")
+    .prepare("SELECT * FROM challenges WHERE creator_id = ? AND status = 'active'")
     .all(req.session.userId);
 
   const joinedRows = db
@@ -330,6 +330,16 @@ app.get("/perfil", requireAuth, (req, res) => {
     .prepare("SELECT COUNT(id) AS total FROM exercise_logs WHERE user_id = ?")
     .get(req.session.userId).total;
 
+  const endedChallenges = db
+    .prepare(
+      `SELECT DISTINCT c.*
+       FROM challenges c
+       LEFT JOIN challenge_participants cp ON cp.challenge_id = c.id
+       WHERE (c.creator_id = ? OR cp.user_id = ?) AND c.status = 'closed'
+       ORDER BY c.end_date DESC`
+    )
+    .all(req.session.userId, req.session.userId);
+
   const activityBreakdown = db
     .prepare(
       `SELECT activity, COUNT(*) AS total
@@ -377,6 +387,7 @@ app.get("/perfil", requireAuth, (req, res) => {
     exerciseCount,
     activityBreakdown,
     weeklySeries,
+    endedChallenges,
   });
 });
 
@@ -539,8 +550,8 @@ app.post("/challenges/novo", requireAuth, (req, res) => {
   const result = db
     .prepare(
       `INSERT INTO challenges
-        (title, description, start_date, end_date, goal_count, group_goal, prize, penalty, invite_code, created_at, creator_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        (title, description, start_date, end_date, goal_count, group_goal, status, prize, penalty, invite_code, created_at, creator_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       title,
@@ -549,12 +560,18 @@ app.post("/challenges/novo", requireAuth, (req, res) => {
       endDate,
       goalCount,
       groupGoal,
+      "active",
       prize || null,
       penalty || null,
       inviteCode,
       new Date().toISOString(),
       req.session.userId
     );
+
+  db.prepare(
+    `INSERT INTO challenge_participants (user_id, challenge_id, joined_at)
+     VALUES (?, ?, ?)`
+  ).run(req.session.userId, result.lastInsertRowid, new Date().toISOString());
 
   addFlash(req, "success", "Desafio criado!");
   return res.redirect(`/challenges/${result.lastInsertRowid}`);
@@ -575,12 +592,24 @@ app.get("/challenges/:id", requireAuth, (req, res) => {
       "SELECT id FROM challenge_participants WHERE user_id = ? AND challenge_id = ?"
     )
     .get(req.session.userId, challengeId);
-  const hasJoined = Boolean(participant);
+  let hasJoined = Boolean(participant);
   const isOwner = challenge.creator_id === req.session.userId;
 
   if (!hasJoined && !isOwner) {
     addFlash(req, "error", "Você não participa deste desafio.");
     return res.redirect("/dashboard");
+  }
+
+  if (challenge.status !== "active") {
+    addFlash(req, "info", "Este desafio está encerrado.");
+  }
+
+  if (isOwner && !hasJoined) {
+    db.prepare(
+      `INSERT INTO challenge_participants (user_id, challenge_id, joined_at)
+       VALUES (?, ?, ?)`
+    ).run(req.session.userId, challengeId, new Date().toISOString());
+    hasJoined = true;
   }
 
   if (!challenge.invite_code) {
@@ -641,6 +670,14 @@ app.post("/challenges/:id/adicionar", requireAuth, (req, res) => {
     return res.redirect("/dashboard");
   }
 
+  const challengeStatus = db
+    .prepare("SELECT status FROM challenges WHERE id = ?")
+    .get(challengeId);
+  if (!challengeStatus || challengeStatus.status !== "active") {
+    addFlash(req, "error", "Este desafio está encerrado.");
+    return res.redirect(`/challenges/${challengeId}`);
+  }
+
   const isParticipant = db
     .prepare(
       "SELECT id FROM challenge_participants WHERE user_id = ? AND challenge_id = ?"
@@ -659,7 +696,20 @@ app.post("/challenges/:id/adicionar", requireAuth, (req, res) => {
   }
 
   if (user.id === challenge.creator_id) {
-    addFlash(req, "info", "Este usuario ja e o criador do desafio.");
+    const creatorParticipant = db
+      .prepare(
+        "SELECT id FROM challenge_participants WHERE user_id = ? AND challenge_id = ?"
+      )
+      .get(user.id, challengeId);
+    if (!creatorParticipant) {
+      db.prepare(
+        `INSERT INTO challenge_participants (user_id, challenge_id, joined_at)
+         VALUES (?, ?, ?)`
+      ).run(user.id, challengeId, new Date().toISOString());
+      addFlash(req, "success", "Criador adicionado como participante.");
+      return res.redirect(`/challenges/${challengeId}`);
+    }
+    addFlash(req, "info", "Este usuário já participa do desafio.");
     return res.redirect(`/challenges/${challengeId}`);
   }
 
@@ -692,6 +742,11 @@ app.get("/convite/:code", requireAuth, (req, res) => {
     return res.redirect("/dashboard");
   }
 
+  if (challenge.status !== "active") {
+    addFlash(req, "error", "Este desafio está encerrado.");
+    return res.redirect("/dashboard");
+  }
+
   if (challenge.creator_id === req.session.userId) {
     return res.redirect(`/challenges/${challenge.id}`);
   }
@@ -714,6 +769,13 @@ app.get("/convite/:code", requireAuth, (req, res) => {
 
 app.post("/challenges/:id/entrar", requireAuth, (req, res) => {
   const challengeId = Number(req.params.id);
+  const challenge = db
+    .prepare("SELECT status FROM challenges WHERE id = ?")
+    .get(challengeId);
+  if (!challenge || challenge.status !== "active") {
+    addFlash(req, "error", "Este desafio está encerrado.");
+    return res.redirect(`/challenges/${challengeId}`);
+  }
 
   const existing = db
     .prepare(
@@ -768,6 +830,53 @@ app.post("/challenges/:id/log", requireAuth, (req, res) => {
 
   addFlash(req, "success", "Treino registrado!");
   return res.redirect(`/challenges/${challengeId}`);
+});
+
+app.post("/challenges/:id/encerrar", requireAuth, (req, res) => {
+  const challengeId = Number(req.params.id);
+  const challenge = db
+    .prepare("SELECT id, creator_id FROM challenges WHERE id = ?")
+    .get(challengeId);
+  if (!challenge) {
+    addFlash(req, "error", "Desafio não encontrado.");
+    return res.redirect("/dashboard");
+  }
+  if (challenge.creator_id !== req.session.userId) {
+    addFlash(req, "error", "Você não pode encerrar este desafio.");
+    return res.redirect(`/challenges/${challengeId}`);
+  }
+  db.prepare("UPDATE challenges SET status = 'closed' WHERE id = ?").run(
+    challengeId
+  );
+  addFlash(req, "success", "Desafio encerrado.");
+  return res.redirect("/perfil");
+});
+
+app.post("/challenges/:id/excluir", requireAuth, (req, res) => {
+  const challengeId = Number(req.params.id);
+  const challenge = db
+    .prepare("SELECT id, creator_id FROM challenges WHERE id = ?")
+    .get(challengeId);
+  if (!challenge) {
+    addFlash(req, "error", "Desafio não encontrado.");
+    return res.redirect("/dashboard");
+  }
+  if (challenge.creator_id !== req.session.userId) {
+    addFlash(req, "error", "Você não pode excluir este desafio.");
+    return res.redirect(`/challenges/${challengeId}`);
+  }
+
+  const transaction = db.transaction((id) => {
+    db.prepare("DELETE FROM exercise_logs WHERE challenge_id = ?").run(id);
+    db.prepare("DELETE FROM challenge_participants WHERE challenge_id = ?").run(
+      id
+    );
+    db.prepare("DELETE FROM challenges WHERE id = ?").run(id);
+  });
+
+  transaction(challengeId);
+  addFlash(req, "success", "Desafio excluído.");
+  return res.redirect("/dashboard");
 });
 
 app.listen(PORT, () => {

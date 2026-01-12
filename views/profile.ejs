@@ -124,3 +124,19 @@
     </div>
   </div>
 </section>
+
+<% if (endedChallenges && endedChallenges.length) { %>
+<section class="card">
+  <h3>Desafios encerrados</h3>
+  <ul class="challenge-list">
+    <% endedChallenges.forEach((challenge) => { %>
+      <li>
+        <div>
+          <strong><a class="inline-link" href="/challenges/<%= challenge.id %>"><%= challenge.title %></a></strong>
+          <span><%= challenge.start_date %> a <%= challenge.end_date %></span>
+        </div>
+      </li>
+    <% }) %>
+  </ul>
+</section>
+<% } %>

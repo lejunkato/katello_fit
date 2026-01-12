@@ -24,6 +24,7 @@ function initDb() {
       end_date TEXT NOT NULL,
       goal_count INTEGER NOT NULL,
       group_goal INTEGER,
+      status TEXT NOT NULL DEFAULT 'active',
       prize TEXT,
       penalty TEXT,
       invite_code TEXT,
@@ -70,6 +71,11 @@ function initDb() {
   const hasGroupGoal = challengeColumns.some((col) => col.name === "group_goal");
   if (!hasGroupGoal) {
     db.exec("ALTER TABLE challenges ADD COLUMN group_goal INTEGER");
+  }
+
+  const hasStatus = challengeColumns.some((col) => col.name === "status");
+  if (!hasStatus) {
+    db.exec("ALTER TABLE challenges ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
   }
 
   const userColumns = db.prepare("PRAGMA table_info(users)").all();
