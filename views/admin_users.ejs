@@ -1,0 +1,49 @@
+<section class="hero">
+  <div>
+    <h2>Usuarios</h2>
+    <p>Gerencie cadastros, resete senhas e exclua usuarios.</p>
+  </div>
+  <div class="hero-badge">🛡️</div>
+</section>
+
+<section class="card">
+  <% if (users && users.length) { %>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Email</th>
+            <th>Treinos</th>
+            <th>Desafios</th>
+            <th>Criados</th>
+            <th>Acoes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% users.forEach((user) => { %>
+            <tr>
+              <td><%= user.name %></td>
+              <td><%= user.email %></td>
+              <td><%= user.exercise_count %></td>
+              <td><%= user.challenges_joined %></td>
+              <td><%= user.challenges_created %></td>
+              <td>
+                <div class="action-group">
+                  <form method="post" action="/admin/usuarios/<%= user.id %>/reset">
+                    <button type="submit" class="button-link ghost">Reset senha</button>
+                  </form>
+                  <form method="post" action="/admin/usuarios/<%= user.id %>/excluir" onsubmit="return confirm('Tem certeza que deseja excluir este usuario?');">
+                    <button type="submit" class="button-link danger">Excluir</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } else { %>
+    <p>Nenhum usuario cadastrado.</p>
+  <% } %>
+</section>

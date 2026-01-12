@@ -5,6 +5,7 @@ const express = require("express");
 const session = require("express-session");
 const SQLiteStore = require("connect-sqlite3")(session);
 const bcrypt = require("bcrypt");
+const crypto = require("crypto");
 const morgan = require("morgan");
 const expressLayouts = require("express-ejs-layouts");
 
@@ -61,6 +62,10 @@ function toDateOnly(value) {
   return new Date(`${value}T00:00:00`);
 }
 
+function generateInviteCode() {
+  return crypto.randomBytes(6).toString("hex");
+}
+
 function daysRemaining(endDate) {
   const today = new Date();
   const end = toDateOnly(endDate);
@@ -70,7 +75,11 @@ function daysRemaining(endDate) {
 
 app.use((req, res, next) => {
   res.locals.currentUser = req.session.userName
-    ? { name: req.session.userName, role: req.session.role }
+    ? {
+        name: req.session.userName,
+        role: req.session.role,
+        email: req.session.userEmail,
+      }
     : null;
   res.locals.currentPath = req.path;
   res.locals.flash = consumeFlash(req);
@@ -141,6 +150,7 @@ app.post("/login", async (req, res) => {
   req.session.userId = user.id;
   req.session.userName = user.name;
   req.session.role = user.role;
+  req.session.userEmail = user.email;
   return res.redirect("/dashboard");
 });
 
@@ -149,9 +159,15 @@ app.get("/logout", (req, res) => {
 });
 
 app.get("/dashboard", requireAuth, (req, res) => {
-  const challenges = db
-    .prepare("SELECT * FROM challenges ORDER BY end_date ASC")
-    .all();
+  const visibleChallenges = db
+    .prepare(
+      `SELECT DISTINCT c.*
+       FROM challenges c
+       LEFT JOIN challenge_participants cp ON cp.challenge_id = c.id
+       WHERE c.creator_id = ? OR cp.user_id = ?
+       ORDER BY c.end_date ASC`
+    )
+    .all(req.session.userId, req.session.userId);
 
   const creatorChallenges = db
     .prepare("SELECT * FROM challenges WHERE creator_id = ?")
@@ -165,8 +181,11 @@ app.get("/dashboard", requireAuth, (req, res) => {
   const userExerciseCount = db
     .prepare("SELECT COUNT(id) AS total FROM exercise_logs WHERE user_id = ?")
     .get(req.session.userId).total;
+  const userGoal = db
+    .prepare("SELECT goal_exercises FROM users WHERE id = ?")
+    .get(req.session.userId)?.goal_exercises || 0;
 
-  const activeChallenge = challenges[0] || null;
+  const activeChallenge = visibleChallenges[0] || null;
   let activeStats = null;
   if (activeChallenge) {
     const participantCount = db
@@ -231,19 +250,68 @@ app.get("/dashboard", requireAuth, (req, res) => {
 
   res.render("dashboard", {
     title: "Dashboard",
-    activeChallenges: challenges,
+    activeChallenges: visibleChallenges,
     creatorChallenges: creatorCards,
     joinedIds,
     userExerciseCount,
+    userGoal,
+    goalProgress:
+      userGoal > 0 ? Math.min(Math.round((userExerciseCount / userGoal) * 100), 100) : 0,
     activeChallenge,
     activeStats,
     position: position || "--",
+    today: new Date().toISOString().slice(0, 10),
   });
+});
+
+app.post("/atividades", requireAuth, (req, res) => {
+  const activity = (req.body.activity || "").trim();
+  const loggedOn = req.body.logged_on || new Date().toISOString().slice(0, 10);
+
+  if (!activity) {
+    addFlash(req, "error", "Informe o tipo de exercicio.");
+    return res.redirect("/dashboard");
+  }
+
+  const joinedChallenges = db
+    .prepare("SELECT challenge_id FROM challenge_participants WHERE user_id = ?")
+    .all(req.session.userId)
+    .map((row) => row.challenge_id);
+
+  if (joinedChallenges.length === 0) {
+    addFlash(req, "info", "Voce nao participa de nenhum desafio.");
+    return res.redirect("/dashboard");
+  }
+
+  const insertLog = db.prepare(
+    `INSERT INTO exercise_logs (user_id, challenge_id, count, activity, logged_on, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  );
+
+  const now = new Date().toISOString();
+  const transaction = db.transaction((challengeIds) => {
+    challengeIds.forEach((challengeId) => {
+      insertLog.run(
+        req.session.userId,
+        challengeId,
+        1,
+        activity,
+        loggedOn,
+        now
+      );
+    });
+  });
+
+  transaction(joinedChallenges);
+  addFlash(req, "success", "Atividade registrada em todos os desafios.");
+  return res.redirect("/dashboard");
 });
 
 app.get("/perfil", requireAuth, (req, res) => {
   const user = db
-    .prepare("SELECT id, name, email, role, created_at FROM users WHERE id = ?")
+    .prepare(
+      "SELECT id, name, email, role, created_at, goal_exercises FROM users WHERE id = ?"
+    )
     .get(req.session.userId);
   const createdCount = db
     .prepare("SELECT COUNT(*) AS total FROM challenges WHERE creator_id = ?")
@@ -257,13 +325,184 @@ app.get("/perfil", requireAuth, (req, res) => {
     .prepare("SELECT COUNT(id) AS total FROM exercise_logs WHERE user_id = ?")
     .get(req.session.userId).total;
 
+  const activityBreakdown = db
+    .prepare(
+      `SELECT activity, COUNT(*) AS total
+       FROM exercise_logs
+       WHERE user_id = ? AND activity IS NOT NULL AND activity != ''
+       GROUP BY activity
+       ORDER BY total DESC`
+    )
+    .all(req.session.userId);
+
+  const today = new Date();
+  const getWeekStart = (date) => {
+    const d = new Date(date);
+    const day = d.getDay() || 7;
+    d.setDate(d.getDate() - (day - 1));
+    d.setHours(0, 0, 0, 0);
+    return d;
+  };
+  const weekStart = getWeekStart(today);
+  const dates = Array.from({ length: 7 }, (_, idx) => {
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + idx);
+    return d.toISOString().slice(0, 10);
+  });
+  const dayNames = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom"];
+  const logs = db
+    .prepare(
+      `SELECT logged_on, COUNT(*) AS total
+       FROM exercise_logs
+       WHERE user_id = ? AND logged_on >= ? AND logged_on <= ?
+       GROUP BY logged_on`
+    )
+    .all(req.session.userId, dates[0], dates[6]);
+  const dayMap = new Map(logs.map((row) => [row.logged_on, row.total]));
+  const weeklySeries = dates.map((date) => ({
+    label: dayNames[new Date(`${date}T00:00:00`).getDay() === 0 ? 6 : new Date(`${date}T00:00:00`).getDay() - 1],
+    total: dayMap.get(date) || 0,
+  }));
+
   res.render("profile", {
     title: "Perfil",
     user,
     createdCount,
     joinedCount,
     exerciseCount,
+    activityBreakdown,
+    weeklySeries,
   });
+});
+
+app.post("/perfil/meta", requireAuth, (req, res) => {
+  const goal = Number(req.body.goal_exercises || 0);
+  if (goal < 0 || Number.isNaN(goal)) {
+    addFlash(req, "error", "Informe uma meta valida.");
+    return res.redirect("/perfil");
+  }
+  db.prepare("UPDATE users SET goal_exercises = ? WHERE id = ?").run(
+    goal,
+    req.session.userId
+  );
+  addFlash(req, "success", "Meta atualizada.");
+  return res.redirect("/perfil");
+});
+
+app.post("/perfil/senha", requireAuth, async (req, res) => {
+  const currentPassword = req.body.current_password || "";
+  const newPassword = req.body.new_password || "";
+  const confirmPassword = req.body.confirm_password || "";
+
+  if (!currentPassword || !newPassword || !confirmPassword) {
+    addFlash(req, "error", "Preencha todos os campos de senha.");
+    return res.redirect("/perfil");
+  }
+
+  if (newPassword.length < 6) {
+    addFlash(req, "error", "A nova senha deve ter pelo menos 6 caracteres.");
+    return res.redirect("/perfil");
+  }
+
+  if (newPassword !== confirmPassword) {
+    addFlash(req, "error", "A confirmacao de senha nao confere.");
+    return res.redirect("/perfil");
+  }
+
+  const user = db
+    .prepare("SELECT password_hash FROM users WHERE id = ?")
+    .get(req.session.userId);
+  if (!user) {
+    addFlash(req, "error", "Usuario nao encontrado.");
+    return res.redirect("/perfil");
+  }
+
+  const ok = await bcrypt.compare(currentPassword, user.password_hash);
+  if (!ok) {
+    addFlash(req, "error", "Senha atual incorreta.");
+    return res.redirect("/perfil");
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+  db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(
+    passwordHash,
+    req.session.userId
+  );
+
+  addFlash(req, "success", "Senha atualizada com sucesso.");
+  return res.redirect("/perfil");
+});
+
+app.get("/admin/usuarios", requireAuth, (req, res) => {
+  const users = db
+    .prepare(
+      `SELECT u.id, u.name, u.email, u.created_at,
+        (SELECT COUNT(*) FROM challenges c WHERE c.creator_id = u.id) AS challenges_created,
+        (SELECT COUNT(*) FROM challenge_participants cp WHERE cp.user_id = u.id) AS challenges_joined,
+        (SELECT COUNT(*) FROM exercise_logs e WHERE e.user_id = u.id) AS exercise_count
+       FROM users u
+       ORDER BY u.created_at DESC`
+    )
+    .all();
+
+  res.render("admin_users", { title: "Usuarios", users });
+});
+
+app.post("/admin/usuarios/:id/reset", requireAuth, async (req, res) => {
+  const userId = Number(req.params.id);
+  const tempPassword = crypto.randomBytes(4).toString("hex");
+  const passwordHash = await bcrypt.hash(tempPassword, 10);
+
+  const result = db
+    .prepare("UPDATE users SET password_hash = ? WHERE id = ?")
+    .run(passwordHash, userId);
+
+  if (!result.changes) {
+    addFlash(req, "error", "Usuario nao encontrado.");
+    return res.redirect("/admin/usuarios");
+  }
+
+  addFlash(req, "success", `Senha temporaria: ${tempPassword}`);
+  return res.redirect("/admin/usuarios");
+});
+
+app.post("/admin/usuarios/:id/excluir", requireAuth, (req, res) => {
+  const userId = Number(req.params.id);
+
+  if (userId === req.session.userId) {
+    addFlash(req, "error", "Voce nao pode excluir seu proprio usuario.");
+    return res.redirect("/admin/usuarios");
+  }
+
+  const deleteUser = db.transaction((targetUserId) => {
+    const challengeIds = db
+      .prepare("SELECT id FROM challenges WHERE creator_id = ?")
+      .all(targetUserId)
+      .map((row) => row.id);
+
+    if (challengeIds.length) {
+      const placeholders = challengeIds.map(() => "?").join(", ");
+      db.prepare(
+        `DELETE FROM exercise_logs WHERE challenge_id IN (${placeholders})`
+      ).run(...challengeIds);
+      db.prepare(
+        `DELETE FROM challenge_participants WHERE challenge_id IN (${placeholders})`
+      ).run(...challengeIds);
+      db.prepare(`DELETE FROM challenges WHERE id IN (${placeholders})`).run(
+        ...challengeIds
+      );
+    }
+
+    db.prepare("DELETE FROM exercise_logs WHERE user_id = ?").run(targetUserId);
+    db.prepare("DELETE FROM challenge_participants WHERE user_id = ?").run(
+      targetUserId
+    );
+    db.prepare("DELETE FROM users WHERE id = ?").run(targetUserId);
+  });
+
+  deleteUser(userId);
+  addFlash(req, "success", "Usuario excluido.");
+  return res.redirect("/admin/usuarios");
 });
 
 app.get("/challenges/novo", requireAuth, (req, res) => {
@@ -277,6 +516,7 @@ app.post("/challenges/novo", requireAuth, (req, res) => {
   const startDate = req.body.start_date;
   const endDate = req.body.end_date;
   const goalCount = Number(req.body.goal_count || 0);
+  const groupGoal = req.body.group_goal ? Number(req.body.group_goal) : null;
   const prize = (req.body.prize || "").trim();
   const penalty = (req.body.penalty || "").trim();
 
@@ -285,11 +525,17 @@ app.post("/challenges/novo", requireAuth, (req, res) => {
     return res.redirect("/challenges/novo");
   }
 
+  if (groupGoal !== null && (Number.isNaN(groupGoal) || groupGoal <= 0)) {
+    addFlash(req, "error", "Meta do grupo deve ser um numero valido.");
+    return res.redirect("/challenges/novo");
+  }
+
+  const inviteCode = generateInviteCode();
   const result = db
     .prepare(
       `INSERT INTO challenges
-        (title, description, start_date, end_date, goal_count, prize, penalty, created_at, creator_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        (title, description, start_date, end_date, goal_count, group_goal, prize, penalty, invite_code, created_at, creator_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       title,
@@ -297,8 +543,10 @@ app.post("/challenges/novo", requireAuth, (req, res) => {
       startDate,
       endDate,
       goalCount,
+      groupGoal,
       prize || null,
       penalty || null,
+      inviteCode,
       new Date().toISOString(),
       req.session.userId
     );
@@ -323,10 +571,25 @@ app.get("/challenges/:id", requireAuth, (req, res) => {
     )
     .get(req.session.userId, challengeId);
   const hasJoined = Boolean(participant);
+  const isOwner = challenge.creator_id === req.session.userId;
+
+  if (!hasJoined && !isOwner) {
+    addFlash(req, "error", "Voce nao participa deste desafio.");
+    return res.redirect("/dashboard");
+  }
+
+  if (!challenge.invite_code) {
+    const newCode = generateInviteCode();
+    db.prepare("UPDATE challenges SET invite_code = ? WHERE id = ?").run(
+      newCode,
+      challengeId
+    );
+    challenge.invite_code = newCode;
+  }
 
   const leaderboardRows = db
     .prepare(
-      `SELECT u.name AS name, COALESCE(COUNT(e.id), 0) AS total
+      `SELECT u.id AS user_id, u.name AS name, COALESCE(COUNT(e.id), 0) AS total
        FROM users u
        JOIN challenge_participants cp ON cp.user_id = u.id
        LEFT JOIN exercise_logs e
@@ -338,19 +601,110 @@ app.get("/challenges/:id", requireAuth, (req, res) => {
     .all(challengeId);
 
   const leaderboard = leaderboardRows.map((row) => ({
+    userId: row.user_id,
     name: row.name,
     total: row.total,
     remaining: Math.max(challenge.goal_count - row.total, 0),
   }));
+
 
   res.render("challenge", {
     title: challenge.title,
     challenge,
     hasJoined,
     leaderboard,
-    isOwner: challenge.creator_id === req.session.userId,
+    isOwner,
     today: new Date().toISOString().slice(0, 10),
+    inviteLink: `${req.protocol}://${req.get("host")}/convite/${challenge.invite_code}`,
   });
+});
+
+app.post("/challenges/:id/adicionar", requireAuth, (req, res) => {
+  const challengeId = Number(req.params.id);
+  const email = (req.body.email || "").trim().toLowerCase();
+
+  if (!email) {
+    addFlash(req, "error", "Informe o email do usuario.");
+    return res.redirect(`/challenges/${challengeId}`);
+  }
+
+  const challenge = db
+    .prepare("SELECT id, creator_id FROM challenges WHERE id = ?")
+    .get(challengeId);
+  if (!challenge) {
+    addFlash(req, "error", "Desafio nao encontrado.");
+    return res.redirect("/dashboard");
+  }
+
+  const isParticipant = db
+    .prepare(
+      "SELECT id FROM challenge_participants WHERE user_id = ? AND challenge_id = ?"
+    )
+    .get(req.session.userId, challengeId);
+
+  if (!isParticipant && challenge.creator_id !== req.session.userId) {
+    addFlash(req, "error", "Voce nao pode adicionar usuarios neste desafio.");
+    return res.redirect("/dashboard");
+  }
+
+  const user = db.prepare("SELECT id FROM users WHERE email = ?").get(email);
+  if (!user) {
+    addFlash(req, "error", "Usuario nao encontrado.");
+    return res.redirect(`/challenges/${challengeId}`);
+  }
+
+  if (user.id === challenge.creator_id) {
+    addFlash(req, "info", "Este usuario ja e o criador do desafio.");
+    return res.redirect(`/challenges/${challengeId}`);
+  }
+
+  const existing = db
+    .prepare(
+      "SELECT id FROM challenge_participants WHERE user_id = ? AND challenge_id = ?"
+    )
+    .get(user.id, challengeId);
+  if (existing) {
+    addFlash(req, "info", "Usuario ja participa deste desafio.");
+    return res.redirect(`/challenges/${challengeId}`);
+  }
+
+  db.prepare(
+    `INSERT INTO challenge_participants (user_id, challenge_id, joined_at)
+     VALUES (?, ?, ?)`
+  ).run(user.id, challengeId, new Date().toISOString());
+
+  addFlash(req, "success", "Usuario adicionado ao desafio.");
+  return res.redirect(`/challenges/${challengeId}`);
+});
+
+app.get("/convite/:code", requireAuth, (req, res) => {
+  const code = req.params.code;
+  const challenge = db
+    .prepare("SELECT * FROM challenges WHERE invite_code = ?")
+    .get(code);
+  if (!challenge) {
+    addFlash(req, "error", "Convite invalido.");
+    return res.redirect("/dashboard");
+  }
+
+  if (challenge.creator_id === req.session.userId) {
+    return res.redirect(`/challenges/${challenge.id}`);
+  }
+
+  const existing = db
+    .prepare(
+      "SELECT id FROM challenge_participants WHERE user_id = ? AND challenge_id = ?"
+    )
+    .get(req.session.userId, challenge.id);
+  if (!existing) {
+    db.prepare(
+      `INSERT INTO challenge_participants (user_id, challenge_id, joined_at)
+       VALUES (?, ?, ?)`
+    ).run(req.session.userId, challenge.id, new Date().toISOString());
+  }
+
+  addFlash(req, "success", "Voce entrou no desafio!");
+  return res.redirect(`/challenges/${challenge.id}`);
 });
 
 app.post("/challenges/:id/entrar", requireAuth, (req, res) => {

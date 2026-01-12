@@ -12,6 +12,7 @@ function initDb() {
       email TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL DEFAULT 'participant',
+      goal_exercises INTEGER DEFAULT 0,
       created_at TEXT NOT NULL
     );
 
@@ -22,8 +23,10 @@ function initDb() {
       start_date TEXT NOT NULL,
       end_date TEXT NOT NULL,
       goal_count INTEGER NOT NULL,
+      group_goal INTEGER,
       prize TEXT,
       penalty TEXT,
+      invite_code TEXT,
       created_at TEXT NOT NULL,
       creator_id INTEGER NOT NULL,
       FOREIGN KEY(creator_id) REFERENCES users(id)
@@ -56,6 +59,23 @@ function initDb() {
   const hasActivity = columns.some((col) => col.name === "activity");
   if (!hasActivity) {
     db.exec("ALTER TABLE exercise_logs ADD COLUMN activity TEXT");
+  }
+
+  const challengeColumns = db.prepare("PRAGMA table_info(challenges)").all();
+  const hasInvite = challengeColumns.some((col) => col.name === "invite_code");
+  if (!hasInvite) {
+    db.exec("ALTER TABLE challenges ADD COLUMN invite_code TEXT");
+  }
+
+  const hasGroupGoal = challengeColumns.some((col) => col.name === "group_goal");
+  if (!hasGroupGoal) {
+    db.exec("ALTER TABLE challenges ADD COLUMN group_goal INTEGER");
+  }
+
+  const userColumns = db.prepare("PRAGMA table_info(users)").all();
+  const hasGoal = userColumns.some((col) => col.name === "goal_exercises");
+  if (!hasGoal) {
+    db.exec("ALTER TABLE users ADD COLUMN goal_exercises INTEGER DEFAULT 0");
   }
 }
 

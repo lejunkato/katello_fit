@@ -30,3 +30,97 @@
     </div>
   </div>
 </section>
+
+<section class="card">
+  <h3>Meta de exercicios</h3>
+  <form method="post" action="/perfil/meta" class="form-stacked">
+    <label>Meta semanal
+      <input type="number" name="goal_exercises" min="0" value="<%= user.goal_exercises || 0 %>" />
+    </label>
+    <div class="form-actions right">
+      <button type="submit" class="button-link compact">Salvar meta</button>
+    </div>
+  </form>
+</section>
+
+<section class="card">
+  <h3>Trocar senha</h3>
+  <form method="post" action="/perfil/senha" class="form-stacked form-actions-bottom">
+    <div class="two-columns">
+      <label>Senha atual
+        <input type="password" name="current_password" required />
+      </label>
+      <label>Nova senha
+        <input type="password" name="new_password" required />
+      </label>
+      <label>Confirmar nova senha
+        <input type="password" name="confirm_password" required />
+      </label>
+    </div>
+    <div class="form-actions right">
+      <button type="submit" class="button-link compact">Atualizar senha</button>
+    </div>
+  </form>
+</section>
+
+<section class="grid">
+  <div class="card">
+    <h3>Atividades por tipo</h3>
+    <% const totalActivities = activityBreakdown.reduce((sum, row) => sum + row.total, 0); %>
+    <% const colors = ["#2563eb", "#60a5fa", "#fbbf24", "#34d399", "#f97316", "#a78bfa"]; %>
+    <% let offset = 0; %>
+    <% const segments = activityBreakdown.map((row, index) => { %>
+      <% const pct = totalActivities ? (row.total / totalActivities) * 100 : 0; %>
+      <% const start = offset; %>
+      <% const end = offset + pct; %>
+      <% offset = end; %>
+      <% return `${colors[index % colors.length]} ${start}% ${end}%`; %>
+    <% }).join(", "); %>
+    <% let angleOffset = 0; %>
+    <% const total = totalActivities || 1; %>
+    <div class="pie-chart-wrapper">
+      <div class="pie-chart" style="background: conic-gradient(<%= segments || '#e5e7eb 0% 100%' %>);"></div>
+      <% activityBreakdown.forEach((row, index) => { %>
+        <% const percent = (row.total / total) * 100; %>
+        <% const midAngle = (angleOffset + percent / 2) * 3.6; %>
+        <% const rad = (midAngle - 90) * (Math.PI / 180); %>
+        <% const radius = 105; %>
+        <% const cx = 90 + radius * Math.cos(rad); %>
+        <% const cy = 90 + radius * Math.sin(rad); %>
+        <span class="pie-label" style="left: <%= Math.round(cx) %>px; top: <%= Math.round(cy) %>px;">
+          <%= row.total %> exercicios
+        </span>
+        <% angleOffset += percent; %>
+      <% }) %>
+    </div>
+    <ul class="legend">
+      <% if (activityBreakdown.length) { %>
+        <% activityBreakdown.forEach((row, index) => { %>
+          <li>
+            <span class="legend-dot" style="background: <%= colors[index % colors.length] %>;"></span>
+            <span><%= row.activity %> (<%= row.total %>)</span>
+          </li>
+        <% }) %>
+      <% } else { %>
+        <li>Nenhuma atividade registrada.</li>
+      <% } %>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>Evolução da semana</h3>
+    <% const maxValue = Math.max(...weeklySeries.map(item => item.total), 1); %>
+    <div class="bar-chart">
+      <% weeklySeries.forEach((item) => { %>
+        <div class="bar-column">
+          <span class="bar-value"><%= item.total %> exercicios</span>
+          <div class="bar-track">
+            <div class="bar" style="height: <%= Math.round((item.total / maxValue) * 100) %>%;">
+            </div>
+          </div>
+          <span class="bar-label"><%= item.label %></span>
+        </div>
+      <% }) %>
+    </div>
+  </div>
+</section>

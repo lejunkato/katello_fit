@@ -21,6 +21,36 @@
   </div>
 </section>
 
+<% if (userGoal > 0) { %>
+<section class="card">
+  <h3>Meta pessoal</h3>
+  <div class="progress-meta">
+    <span><%= userExerciseCount %> / <%= userGoal %> exercicios</span>
+    <span><%= goalProgress %>%</span>
+  </div>
+  <div class="progress slim">
+    <div class="progress-bar" style="width: <%= goalProgress %>%;"></div>
+  </div>
+</section>
+<% } %>
+
+<section class="card">
+  <h3>Registrar atividade</h3>
+  <form method="post" action="/atividades" class="form-stacked form-actions-bottom">
+    <div class="two-columns">
+      <label>Exercicio
+        <input type="text" name="activity" placeholder="Ex: corrida, academia" required />
+      </label>
+      <label>Data do treino
+        <input type="date" name="logged_on" value="<%= today %>" />
+      </label>
+    </div>
+    <div class="form-actions right">
+      <button type="submit" class="button-link compact">Adicionar</button>
+    </div>
+  </form>
+</section>
+
 <section class="card challenge-highlight">
   <div class="card-header">
     <h3>Desafio ativo</h3>
