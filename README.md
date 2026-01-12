@@ -1,11 +1,11 @@
 # Fitness Katello (Node)
 
-Aplicacao web simples para criar desafios fitness, registrar exercicios e gerar ranking.
+Aplicação web simples para criar desafios fitness, registrar exercícios e gerar ranking.
 
 ## Funcionalidades
 - Login e cadastro com email/senha
 - Qualquer usuario pode criar desafios
-- Participacao e registro de exercicios por participantes
+- Participação e registro de exercícios por participantes
 - Ranking com progresso por desafio
 - Espaco reservado para resumos semanais (envio por email/WhatsApp em breve)
 

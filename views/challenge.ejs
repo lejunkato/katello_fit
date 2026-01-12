@@ -55,7 +55,7 @@
               <span class="podium-place"><%= place %></span>
               <div class="podium-base">
                 <strong><%= row.name %></strong>
-                <span><%= row.total %> exercicios</span>
+              <span><%= row.total %> exercícios</span>
               </div>
             </div>
           <% }) %>
@@ -71,7 +71,7 @@
         <span><%= progress %>%</span>
       </div>
       <div class="progress-meta">
-        <span><%= totalDone %> / <%= totalTarget %> exercicios</span>
+        <span><%= totalDone %> / <%= totalTarget %> exercícios</span>
       </div>
       <div class="progress slim">
         <div class="progress-bar" style="width: <%= progress %>%"></div>
@@ -80,7 +80,7 @@
 
     <section class="card">
       <div class="card-header">
-        <h3>Exercicios por participante</h3>
+        <h3>Exercícios por participante</h3>
       </div>
       <% if (leaderboard.length) { %>
         <% const maxTotal = Math.max(...leaderboard.map(item => item.total), 1); %>
@@ -95,7 +95,7 @@
           <% }) %>
         </div>
       <% } else { %>
-        <p>Sem dados para o grafico.</p>
+        <p>Sem dados para o gráfico.</p>
       <% } %>
     </section>
   </div>
@@ -105,7 +105,7 @@
       <h3>Registrar treino</h3>
       <% if (hasJoined) { %>
         <form method="post" action="/challenges/<%= challenge.id %>/log" class="two-columns log-form">
-          <label>Exercicio
+          <label>Exercício
             <input type="text" name="activity" placeholder="Ex: corrida, academia" required />
           </label>
           <label>Data do treino

@@ -32,7 +32,7 @@
 </section>
 
 <section class="card">
-  <h3>Meta de exercicios</h3>
+  <h3>Meta de exercícios</h3>
   <form method="post" action="/perfil/meta" class="form-stacked">
     <label>Meta semanal
       <input type="number" name="goal_exercises" min="0" value="<%= user.goal_exercises || 0 %>" />
@@ -88,7 +88,7 @@
         <% const cx = 90 + radius * Math.cos(rad); %>
         <% const cy = 90 + radius * Math.sin(rad); %>
         <span class="pie-label" style="left: <%= Math.round(cx) %>px; top: <%= Math.round(cy) %>px;">
-          <%= row.total %> exercicios
+          <%= row.total %> exercícios
         </span>
         <% angleOffset += percent; %>
       <% }) %>
@@ -113,7 +113,7 @@
     <div class="bar-chart">
       <% weeklySeries.forEach((item) => { %>
         <div class="bar-column">
-          <span class="bar-value"><%= item.total %> exercicios</span>
+          <span class="bar-value"><%= item.total %> exercícios</span>
           <div class="bar-track">
             <div class="bar" style="height: <%= Math.round((item.total / maxValue) * 100) %>%;">
             </div>

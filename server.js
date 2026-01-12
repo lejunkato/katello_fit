@@ -66,8 +66,13 @@ function generateInviteCode() {
   return crypto.randomBytes(6).toString("hex");
 }
 
+function getLocalDateString(date = new Date()) {
+  const offsetMs = date.getTimezoneOffset() * 60 * 1000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 10);
+}
+
 function daysRemaining(endDate) {
-  const today = new Date();
+  const today = new Date(`${getLocalDateString()}T00:00:00`);
   const end = toDateOnly(endDate);
   const diffMs = end.getTime() - toDateOnly(today.toISOString().slice(0, 10)).getTime();
   return Math.max(Math.ceil(diffMs / (1000 * 60 * 60 * 24)), 0);
@@ -121,7 +126,7 @@ app.post("/registrar", async (req, res) => {
      VALUES (?, ?, ?, ?, ?)`
   ).run(name, email, passwordHash, "participant", new Date().toISOString());
 
-  addFlash(req, "success", "Cadastro criado com sucesso. Faca login.");
+  addFlash(req, "success", "Cadastro criado com sucesso. Faça login.");
   return res.redirect("/login");
 });
 
@@ -137,13 +142,13 @@ app.post("/login", async (req, res) => {
     .prepare("SELECT * FROM users WHERE email = ?")
     .get(email);
   if (!user) {
-    addFlash(req, "error", "Email ou senha invalidos.");
+    addFlash(req, "error", "E-mail ou senha inválidos.");
     return res.redirect("/login");
   }
 
   const ok = await bcrypt.compare(password, user.password_hash);
   if (!ok) {
-    addFlash(req, "error", "Email ou senha invalidos.");
+    addFlash(req, "error", "E-mail ou senha inválidos.");
     return res.redirect("/login");
   }
 
@@ -260,13 +265,13 @@ app.get("/dashboard", requireAuth, (req, res) => {
     activeChallenge,
     activeStats,
     position: position || "--",
-    today: new Date().toISOString().slice(0, 10),
+    today: getLocalDateString(),
   });
 });
 
 app.post("/atividades", requireAuth, (req, res) => {
   const activity = (req.body.activity || "").trim();
-  const loggedOn = req.body.logged_on || new Date().toISOString().slice(0, 10);
+  const loggedOn = req.body.logged_on || getLocalDateString();
 
   if (!activity) {
     addFlash(req, "error", "Informe o tipo de exercicio.");
@@ -279,7 +284,7 @@ app.post("/atividades", requireAuth, (req, res) => {
     .map((row) => row.challenge_id);
 
   if (joinedChallenges.length === 0) {
-    addFlash(req, "info", "Voce nao participa de nenhum desafio.");
+    addFlash(req, "info", "Você não participa de nenhum desafio.");
     return res.redirect("/dashboard");
   }
 
@@ -352,13 +357,13 @@ app.get("/perfil", requireAuth, (req, res) => {
   const dayNames = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom"];
   const logs = db
     .prepare(
-      `SELECT logged_on, COUNT(*) AS total
+      `SELECT substr(logged_on, 1, 10) AS day, COUNT(*) AS total
        FROM exercise_logs
-       WHERE user_id = ? AND logged_on >= ? AND logged_on <= ?
-       GROUP BY logged_on`
+       WHERE user_id = ? AND substr(logged_on, 1, 10) >= ? AND substr(logged_on, 1, 10) <= ?
+       GROUP BY day`
     )
     .all(req.session.userId, dates[0], dates[6]);
-  const dayMap = new Map(logs.map((row) => [row.logged_on, row.total]));
+  const dayMap = new Map(logs.map((row) => [row.day, row.total]));
   const weeklySeries = dates.map((date) => ({
     label: dayNames[new Date(`${date}T00:00:00`).getDay() === 0 ? 6 : new Date(`${date}T00:00:00`).getDay() - 1],
     total: dayMap.get(date) || 0,
@@ -405,7 +410,7 @@ app.post("/perfil/senha", requireAuth, async (req, res) => {
   }
 
   if (newPassword !== confirmPassword) {
-    addFlash(req, "error", "A confirmacao de senha nao confere.");
+    addFlash(req, "error", "A confirmação de senha não confere.");
     return res.redirect("/perfil");
   }
 
@@ -413,7 +418,7 @@ app.post("/perfil/senha", requireAuth, async (req, res) => {
     .prepare("SELECT password_hash FROM users WHERE id = ?")
     .get(req.session.userId);
   if (!user) {
-    addFlash(req, "error", "Usuario nao encontrado.");
+    addFlash(req, "error", "Usuário não encontrado.");
     return res.redirect("/perfil");
   }
 
@@ -445,7 +450,7 @@ app.get("/admin/usuarios", requireAuth, (req, res) => {
     )
     .all();
 
-  res.render("admin_users", { title: "Usuarios", users });
+  res.render("admin_users", { title: "Usuários", users });
 });
 
 app.post("/admin/usuarios/:id/reset", requireAuth, async (req, res) => {
@@ -458,7 +463,7 @@ app.post("/admin/usuarios/:id/reset", requireAuth, async (req, res) => {
     .run(passwordHash, userId);
 
   if (!result.changes) {
-    addFlash(req, "error", "Usuario nao encontrado.");
+    addFlash(req, "error", "Usuário não encontrado.");
     return res.redirect("/admin/usuarios");
   }
 
@@ -470,7 +475,7 @@ app.post("/admin/usuarios/:id/excluir", requireAuth, (req, res) => {
   const userId = Number(req.params.id);
 
   if (userId === req.session.userId) {
-    addFlash(req, "error", "Voce nao pode excluir seu proprio usuario.");
+    addFlash(req, "error", "Você não pode excluir seu próprio usuário.");
     return res.redirect("/admin/usuarios");
   }
 
@@ -501,7 +506,7 @@ app.post("/admin/usuarios/:id/excluir", requireAuth, (req, res) => {
   });
 
   deleteUser(userId);
-  addFlash(req, "success", "Usuario excluido.");
+  addFlash(req, "success", "Usuário excluído.");
   return res.redirect("/admin/usuarios");
 });
 
@@ -521,12 +526,12 @@ app.post("/challenges/novo", requireAuth, (req, res) => {
   const penalty = (req.body.penalty || "").trim();
 
   if (!description || !startDate || !endDate || !goalCount) {
-    addFlash(req, "error", "Descricao, datas e meta sao obrigatorios.");
+    addFlash(req, "error", "Descrição, datas e meta são obrigatórios.");
     return res.redirect("/challenges/novo");
   }
 
   if (groupGoal !== null && (Number.isNaN(groupGoal) || groupGoal <= 0)) {
-    addFlash(req, "error", "Meta do grupo deve ser um numero valido.");
+    addFlash(req, "error", "Meta do grupo deve ser um número válido.");
     return res.redirect("/challenges/novo");
   }
 
@@ -561,7 +566,7 @@ app.get("/challenges/:id", requireAuth, (req, res) => {
     .prepare("SELECT * FROM challenges WHERE id = ?")
     .get(challengeId);
   if (!challenge) {
-    addFlash(req, "error", "Desafio nao encontrado.");
+    addFlash(req, "error", "Desafio não encontrado.");
     return res.redirect("/dashboard");
   }
 
@@ -574,7 +579,7 @@ app.get("/challenges/:id", requireAuth, (req, res) => {
   const isOwner = challenge.creator_id === req.session.userId;
 
   if (!hasJoined && !isOwner) {
-    addFlash(req, "error", "Voce nao participa deste desafio.");
+    addFlash(req, "error", "Você não participa deste desafio.");
     return res.redirect("/dashboard");
   }
 
@@ -614,7 +619,7 @@ app.get("/challenges/:id", requireAuth, (req, res) => {
     hasJoined,
     leaderboard,
     isOwner,
-    today: new Date().toISOString().slice(0, 10),
+    today: getLocalDateString(),
     inviteLink: `${req.protocol}://${req.get("host")}/convite/${challenge.invite_code}`,
   });
 });
@@ -632,7 +637,7 @@ app.post("/challenges/:id/adicionar", requireAuth, (req, res) => {
     .prepare("SELECT id, creator_id FROM challenges WHERE id = ?")
     .get(challengeId);
   if (!challenge) {
-    addFlash(req, "error", "Desafio nao encontrado.");
+    addFlash(req, "error", "Desafio não encontrado.");
     return res.redirect("/dashboard");
   }
 
@@ -643,13 +648,13 @@ app.post("/challenges/:id/adicionar", requireAuth, (req, res) => {
     .get(req.session.userId, challengeId);
 
   if (!isParticipant && challenge.creator_id !== req.session.userId) {
-    addFlash(req, "error", "Voce nao pode adicionar usuarios neste desafio.");
+    addFlash(req, "error", "Você não pode adicionar usuários neste desafio.");
     return res.redirect("/dashboard");
   }
 
   const user = db.prepare("SELECT id FROM users WHERE email = ?").get(email);
   if (!user) {
-    addFlash(req, "error", "Usuario nao encontrado.");
+    addFlash(req, "error", "Usuário não encontrado.");
     return res.redirect(`/challenges/${challengeId}`);
   }
 
@@ -664,7 +669,7 @@ app.post("/challenges/:id/adicionar", requireAuth, (req, res) => {
     )
     .get(user.id, challengeId);
   if (existing) {
-    addFlash(req, "info", "Usuario ja participa deste desafio.");
+    addFlash(req, "info", "Usuário já participa deste desafio.");
     return res.redirect(`/challenges/${challengeId}`);
   }
 
@@ -673,7 +678,7 @@ app.post("/challenges/:id/adicionar", requireAuth, (req, res) => {
      VALUES (?, ?, ?)`
   ).run(user.id, challengeId, new Date().toISOString());
 
-  addFlash(req, "success", "Usuario adicionado ao desafio.");
+  addFlash(req, "success", "Usuário adicionado ao desafio.");
   return res.redirect(`/challenges/${challengeId}`);
 });
 
@@ -703,7 +708,7 @@ app.get("/convite/:code", requireAuth, (req, res) => {
     ).run(req.session.userId, challenge.id, new Date().toISOString());
   }
 
-  addFlash(req, "success", "Voce entrou no desafio!");
+  addFlash(req, "success", "Você entrou no desafio!");
   return res.redirect(`/challenges/${challenge.id}`);
 });
 
@@ -716,7 +721,7 @@ app.post("/challenges/:id/entrar", requireAuth, (req, res) => {
     )
     .get(req.session.userId, challengeId);
   if (existing) {
-    addFlash(req, "info", "Voce ja participa deste desafio.");
+    addFlash(req, "info", "Você já participa deste desafio.");
     return res.redirect(`/challenges/${challengeId}`);
   }
 
@@ -725,17 +730,17 @@ app.post("/challenges/:id/entrar", requireAuth, (req, res) => {
      VALUES (?, ?, ?)`
   ).run(req.session.userId, challengeId, new Date().toISOString());
 
-  addFlash(req, "success", "Participacao confirmada. Bora treinar!");
+  addFlash(req, "success", "Participação confirmada. Bora treinar!");
   return res.redirect(`/challenges/${challengeId}`);
 });
 
 app.post("/challenges/:id/log", requireAuth, (req, res) => {
   const challengeId = Number(req.params.id);
   const activity = (req.body.activity || "").trim();
-  const loggedOn = req.body.logged_on || new Date().toISOString().slice(0, 10);
+  const loggedOn = req.body.logged_on || getLocalDateString();
 
   if (!activity) {
-    addFlash(req, "error", "Informe o tipo de exercicio.");
+    addFlash(req, "error", "Informe o tipo de exercício.");
     return res.redirect(`/challenges/${challengeId}`);
   }
 
