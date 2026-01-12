@@ -633,6 +633,11 @@ button.button-link {
   font-weight: 700;
 }
 
+.bar-date {
+  font-size: 11px;
+  color: var(--muted);
+}
+
 .bar-value {
   font-size: 12px;
   font-weight: 700;

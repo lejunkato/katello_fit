@@ -184,7 +184,9 @@ app.get("/dashboard", requireAuth, (req, res) => {
   const joinedIds = new Set(joinedRows.map((row) => row.challenge_id));
 
   const userExerciseCount = db
-    .prepare("SELECT COUNT(id) AS total FROM exercise_logs WHERE user_id = ?")
+    .prepare(
+      "SELECT COUNT(DISTINCT COALESCE(activity_id, id)) AS total FROM exercise_logs WHERE user_id = ?"
+    )
     .get(req.session.userId).total;
   const userGoal = db
     .prepare("SELECT goal_exercises FROM users WHERE id = ?")
@@ -289,11 +291,12 @@ app.post("/atividades", requireAuth, (req, res) => {
   }
 
   const insertLog = db.prepare(
-    `INSERT INTO exercise_logs (user_id, challenge_id, count, activity, logged_on, created_at)
-     VALUES (?, ?, ?, ?, ?, ?)`
+    `INSERT INTO exercise_logs (user_id, challenge_id, count, activity, activity_id, logged_on, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
   );
 
   const now = new Date().toISOString();
+  const activityId = crypto.randomBytes(8).toString("hex");
   const transaction = db.transaction((challengeIds) => {
     challengeIds.forEach((challengeId) => {
       insertLog.run(
@@ -301,6 +304,7 @@ app.post("/atividades", requireAuth, (req, res) => {
         challengeId,
         1,
         activity,
+        activityId,
         loggedOn,
         now
       );
@@ -327,7 +331,9 @@ app.get("/perfil", requireAuth, (req, res) => {
     )
     .get(req.session.userId).total;
   const exerciseCount = db
-    .prepare("SELECT COUNT(id) AS total FROM exercise_logs WHERE user_id = ?")
+    .prepare(
+      "SELECT COUNT(DISTINCT COALESCE(activity_id, id)) AS total FROM exercise_logs WHERE user_id = ?"
+    )
     .get(req.session.userId).total;
 
   const endedChallenges = db
@@ -342,7 +348,7 @@ app.get("/perfil", requireAuth, (req, res) => {
 
   const activityBreakdown = db
     .prepare(
-      `SELECT activity, COUNT(*) AS total
+      `SELECT activity, COUNT(DISTINCT COALESCE(activity_id, id)) AS total
        FROM exercise_logs
        WHERE user_id = ? AND activity IS NOT NULL AND activity != ''
        GROUP BY activity
@@ -367,17 +373,23 @@ app.get("/perfil", requireAuth, (req, res) => {
   const dayNames = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom"];
   const logs = db
     .prepare(
-      `SELECT substr(logged_on, 1, 10) AS day, COUNT(*) AS total
+      `SELECT substr(logged_on, 1, 10) AS day, COUNT(DISTINCT COALESCE(activity_id, id)) AS total
        FROM exercise_logs
        WHERE user_id = ? AND substr(logged_on, 1, 10) >= ? AND substr(logged_on, 1, 10) <= ?
        GROUP BY day`
     )
     .all(req.session.userId, dates[0], dates[6]);
   const dayMap = new Map(logs.map((row) => [row.day, row.total]));
-  const weeklySeries = dates.map((date) => ({
-    label: dayNames[new Date(`${date}T00:00:00`).getDay() === 0 ? 6 : new Date(`${date}T00:00:00`).getDay() - 1],
-    total: dayMap.get(date) || 0,
-  }));
+  const weeklySeries = dates.map((date) => {
+    const [year, month, day] = date.split("-");
+    const dayNameIndex = new Date(`${date}T00:00:00`).getDay();
+    const labelIndex = dayNameIndex === 0 ? 6 : dayNameIndex - 1;
+    return {
+      label: dayNames[labelIndex],
+      dateLabel: `${day}-${month}`,
+      total: dayMap.get(date) || 0,
+    };
+  });
 
   res.render("profile", {
     title: "Perfil",
@@ -817,13 +829,14 @@ app.post("/challenges/:id/log", requireAuth, (req, res) => {
   }
 
   db.prepare(
-    `INSERT INTO exercise_logs (user_id, challenge_id, count, activity, logged_on, created_at)
-     VALUES (?, ?, ?, ?, ?, ?)`
+    `INSERT INTO exercise_logs (user_id, challenge_id, count, activity, activity_id, logged_on, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
   ).run(
     req.session.userId,
     challengeId,
     1,
     activity,
+    crypto.randomBytes(8).toString("hex"),
     loggedOn,
     new Date().toISOString()
   );

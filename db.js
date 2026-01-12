@@ -49,6 +49,7 @@ function initDb() {
       challenge_id INTEGER NOT NULL,
       count INTEGER NOT NULL,
       activity TEXT,
+      activity_id TEXT,
       logged_on TEXT NOT NULL,
       created_at TEXT NOT NULL,
       FOREIGN KEY(user_id) REFERENCES users(id),
@@ -60,6 +61,11 @@ function initDb() {
   const hasActivity = columns.some((col) => col.name === "activity");
   if (!hasActivity) {
     db.exec("ALTER TABLE exercise_logs ADD COLUMN activity TEXT");
+  }
+
+  const hasActivityId = columns.some((col) => col.name === "activity_id");
+  if (!hasActivityId) {
+    db.exec("ALTER TABLE exercise_logs ADD COLUMN activity_id TEXT");
   }
 
   const challengeColumns = db.prepare("PRAGMA table_info(challenges)").all();
